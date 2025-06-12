@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 260 84% 74%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 199 74% 49%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 260 84% 94%;
+    --accent-foreground: 260 84% 50%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 260 84% 74%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 260 84% 74%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 199 74% 49%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 260 84% 50%;
+    --accent-foreground: 260 84% 94%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 260 84% 74%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.task-priority-none {
+  @apply border-l-4 border-taskmaster-priority-none;
+}
+
+.task-priority-low {
+  @apply border-l-4 border-blue-300;
+}
+
+.task-priority-medium {
+  @apply border-l-4 border-yellow-400;
+}
+
+.task-priority-high {
+  @apply border-l-4 border-red-500;
+}
+
+.category-badge-campus {
+  @apply bg-taskmaster-category-campus text-blue-800;
+}
+
+.category-badge-work {
+  @apply bg-taskmaster-category-work text-yellow-800;
+}
+
+.category-badge-competition {
+  @apply bg-taskmaster-category-competition text-purple-800;
+}
+
+.category-badge-personal {
+  @apply bg-taskmaster-category-personal text-green-800;
+}
+
+.category-badge-custom {
+  @apply bg-taskmaster-category-custom text-gray-800;
+}
