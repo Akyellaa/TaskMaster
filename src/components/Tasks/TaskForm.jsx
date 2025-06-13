@@ -8,95 +8,79 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format, addMonths } from 'date-fns';
-import { CalendarIcon, Clock, Repeat, BellRing } from 'lucide-react';
+import { format } from 'date-fns';
+import { CalendarIcon, Clock, Repeat } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useCategories } from '@/context/CategoryContext';
 
 const TaskForm = ({ open, onClose, onSubmit, editingTask }) => {
+  const { categories } = useCategories();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('none');
-  const [category, setCategory] = useState('campus');
-  const [dueDate, setDueDate] = useState(new Date());
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [reminderTime, setReminderTime] = useState('none');
+  const [priority, setPriority] = useState(1);
+  const [categoryId, setCategoryId] = useState('none');
+  const [deadline, setDeadline] = useState(new Date());
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringFrequency, setRecurringFrequency] = useState('none');
-  const [recurringEndDate, setRecurringEndDate] = useState(null);
-  const [showRecurringEndDate, setShowRecurringEndDate] = useState(false);
+  const [selectedDays, setSelectedDays] = useState([]);
 
   useEffect(() => {
     if (editingTask) {
       setTitle(editingTask.title);
       setDescription(editingTask.description);
       setPriority(editingTask.priority);
-      setCategory(editingTask.category);
-      setDueDate(new Date(editingTask.dueDate));
-      setIsCompleted(editingTask.isCompleted);
-      setReminderTime(editingTask.reminderTime || 'none');
-      setIsRecurring(editingTask.isRecurring || false);
-      setRecurringFrequency(editingTask.recurringFrequency || 'none');
-      setRecurringEndDate(editingTask.recurringEndDate ? new Date(editingTask.recurringEndDate) : null);
-      setShowRecurringEndDate(!!editingTask.recurringEndDate);
+      setCategoryId(editingTask.category ? editingTask.category.id.toString() : 'none');
+      
+      if ('recurrenceDays' in editingTask) {
+        setIsRecurring(true);
+        setSelectedDays(editingTask.recurrenceDays || []);
+      } else {
+        setIsRecurring(false);
+        setDeadline(editingTask.deadline ? new Date(editingTask.deadline) : new Date());
+      }
     } else {
-      setTitle('');
-      setDescription('');
-      setPriority('none');
-      setCategory('campus');
-      setDueDate(new Date());
-      setIsCompleted(false);
-      setReminderTime('none');
-      setIsRecurring(false);
-      setRecurringFrequency('none');
-      setRecurringEndDate(null);
-      setShowRecurringEndDate(false);
+      resetForm();
     }
   }, [editingTask, open]);
 
-  useEffect(() => {
-    if (isRecurring && !recurringEndDate) {
-      setRecurringEndDate(addMonths(dueDate, 3));
-    }
-  }, [isRecurring, dueDate, recurringEndDate]);
-
-  const handleRecurringToggle = (checked) => {
-    setIsRecurring(checked);
-    if (checked) {
-      setRecurringFrequency('weekly');
-    } else {
-      setRecurringFrequency('none');
-      setRecurringEndDate(null);
-      setShowRecurringEndDate(false);
-    }
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setPriority(1);
+    setCategoryId('none');
+    setDeadline(new Date());
+    setIsRecurring(false);
+    setSelectedDays([]);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const taskData = {
+    
+    // Base task data that's common for both types
+    const baseTaskData = {
       title,
       description,
       priority,
-      category,
-      dueDate,
-      isCompleted,
-      reminderTime,
-      isRecurring,
-      recurringFrequency: isRecurring ? recurringFrequency : 'none',
-      recurringEndDate: isRecurring && showRecurringEndDate ? recurringEndDate : null,
+      categoryId: categoryId === "none" ? null : Number(categoryId),
+      taskType: isRecurring ? 'RECURRING' : 'REGULAR'
     };
+
+    // Add type-specific fields
+    const taskData = isRecurring 
+      ? {
+          ...baseTaskData,
+          recurrenceDays: selectedDays.length > 0 ? selectedDays : null
+        }
+      : {
+          ...baseTaskData,
+          deadline: format(deadline, "yyyy-MM-dd'T'HH:mm:ss'Z'")
+        };
+
     onSubmit(taskData);
-    onClose();
+    resetForm();
   };
 
-  const getPriorityLabel = (p) => {
-    switch (p) {
-      case 'high': return 'High';
-      case 'medium': return 'Medium';
-      case 'low': return 'Low';
-      default: return 'None';
-    }
-  };
+  const weekDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -109,195 +93,180 @@ const TaskForm = ({ open, onClose, onSubmit, editingTask }) => {
           <div className="space-y-4">
             <div>
               <Label htmlFor="title">Title</Label>
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" required />
+              <Input 
+                id="title" 
+                value={title} 
+                onChange={(e) => setTitle(e.target.value)} 
+                placeholder="Task title" 
+                required 
+              />
             </div>
 
             <div>
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Task description" className="min-h-[80px]" />
+              <Textarea 
+                id="description" 
+                value={description} 
+                onChange={(e) => setDescription(e.target.value)} 
+                placeholder="Task description" 
+                className="min-h-[80px]" 
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Priority</Label>
-                <RadioGroup value={priority} onValueChange={(v) => setPriority(v)} className="flex flex-col space-y-1 mt-2">
-                  {['none', 'low', 'medium', 'high'].map((val) => (
-                    <div className="flex items-center space-x-2" key={val}>
-                      <RadioGroupItem value={val} id={`priority-${val}`} />
-                      <Label htmlFor={`priority-${val}`} className="cursor-pointer">
-                        {val.charAt(0).toUpperCase() + val.slice(1)}
+                <RadioGroup 
+                  value={priority.toString()} 
+                  onValueChange={(v) => setPriority(Number(v))} 
+                  className="flex flex-col space-y-1 mt-2"
+                >
+                  {[
+                    { value: '1', label: 'Low' },
+                    { value: '2', label: 'Medium' },
+                    { value: '3', label: 'High' }
+                  ].map(({ value, label }) => (
+                    <div className="flex items-center space-x-2" key={value}>
+                      <RadioGroupItem value={value} id={`priority-${value}`} />
+                      <Label htmlFor={`priority-${value}`} className="cursor-pointer">
+                        {label}
                       </Label>
                     </div>
                   ))}
                 </RadioGroup>
-                <div className="mt-2 text-sm text-muted-foreground">
-                  Selected priority: <span className="font-medium">{getPriorityLabel(priority)}</span>
-                </div>
               </div>
 
               <div>
                 <Label>Category</Label>
-                <Select value={category} onValueChange={(v) => setCategory(v)}>
+                <Select value={categoryId} onValueChange={setCategoryId}>
                   <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {['campus', 'work', 'competition', 'personal', 'custom'].map((c) => (
-                      <SelectItem value={c} key={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
+                    <SelectItem value="none">No Category</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: category.color }}
+                          />
+                          {category.name}
+                        </div>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div>
-              <Label>Due Date</Label>
-              <div className="flex items-center gap-4 mt-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {format(dueDate, "PPP")}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={dueDate} onSelect={(date) => date && setDueDate(date)} initialFocus className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-[150px] justify-start text-left font-normal">
-                      <Clock className="mr-2 h-4 w-4" />
-                      {format(dueDate, "HH:mm")}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-4" align="start">
-                    <div className="grid gap-2 grid-cols-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={23}
-                        placeholder="HH"
-                        value={format(dueDate, "HH")}
-                        onChange={(e) => {
-                          const h = parseInt(e.target.value);
-                          if (!isNaN(h) && h >= 0 && h <= 23) {
-                            const d = new Date(dueDate);
-                            d.setHours(h);
-                            setDueDate(d);
-                          }
-                        }}
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        max={59}
-                        placeholder="MM"
-                        value={format(dueDate, "mm")}
-                        onChange={(e) => {
-                          const m = parseInt(e.target.value);
-                          if (!isNaN(m) && m >= 0 && m <= 59) {
-                            const d = new Date(dueDate);
-                            d.setMinutes(m);
-                            setDueDate(d);
-                          }
-                        }}
-                      />
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <Separator className="my-4" />
-
-            <div>
+            <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <BellRing className="h-5 w-5 mr-2 text-taskmaster-primary" />
-                <Label className="text-base font-medium">Reminder</Label>
+                <Repeat className="h-5 w-5 mr-2 text-taskmaster-primary" />
+                <Label className="text-base font-medium">Recurring Task</Label>
               </div>
-              <div className="mt-2">
-                <Select value={reminderTime} onValueChange={(v) => setReminderTime(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Set a reminder" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No reminder</SelectItem>
-                    <SelectItem value="30min">30 minutes before</SelectItem>
-                    <SelectItem value="1hour">1 hour before</SelectItem>
-                    <SelectItem value="3hours">3 hours before</SelectItem>
-                    <SelectItem value="1day">1 day before</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Switch 
+                checked={isRecurring} 
+                onCheckedChange={setIsRecurring} 
+              />
             </div>
 
-            <Separator className="my-4" />
-
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Repeat className="h-5 w-5 mr-2 text-taskmaster-primary" />
-                  <Label className="text-base font-medium">Recurring Task</Label>
-                </div>
-                <Switch checked={isRecurring} onCheckedChange={handleRecurringToggle} />
-              </div>
-
-              {isRecurring && (
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <Label>Frequency</Label>
-                    <Select value={recurringFrequency} onValueChange={(v) => setRecurringFrequency(v)}>
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="Select frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label>Has End Date</Label>
-                    <Switch checked={showRecurringEndDate} onCheckedChange={setShowRecurringEndDate} />
-                  </div>
-
-                  {showRecurringEndDate && (
-                    <div>
-                      <Label>End Date</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="w-full justify-start text-left font-normal mt-2">
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {recurringEndDate ? format(recurringEndDate, "PPP") : "Select end date"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={recurringEndDate || undefined}
-                            onSelect={(date) => date && setRecurringEndDate(date)}
-                            initialFocus
-                            disabled={(date) => date < dueDate}
-                            className="p-3 pointer-events-auto"
-                          />
-                        </PopoverContent>
-                      </Popover>
+            {isRecurring ? (
+              <div className="space-y-4">
+                <Label>Repeat on</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {weekDays.map((day) => (
+                    <div className="flex items-center space-x-2" key={day}>
+                      <Checkbox
+                        id={day}
+                        checked={selectedDays.includes(day)}
+                        onCheckedChange={(checked) => {
+                          setSelectedDays(prev => 
+                            checked 
+                              ? [...prev, day]
+                              : prev.filter(d => d !== day)
+                          );
+                        }}
+                      />
+                      <Label htmlFor={day}>{day.charAt(0) + day.slice(1).toLowerCase()}</Label>
                     </div>
-                  )}
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div>
+                <Label>Deadline</Label>
+                <div className="flex items-center gap-4 mt-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(deadline, "PPP")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar 
+                        mode="single" 
+                        selected={deadline} 
+                        onSelect={(date) => date && setDeadline(date)} 
+                        initialFocus 
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[150px] justify-start text-left font-normal">
+                        <Clock className="mr-2 h-4 w-4" />
+                        {format(deadline, "HH:mm")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-4" align="start">
+                      <div className="grid gap-2 grid-cols-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          placeholder="HH"
+                          value={format(deadline, "HH")}
+                          onChange={(e) => {
+                            const h = parseInt(e.target.value);
+                            if (!isNaN(h) && h >= 0 && h <= 23) {
+                              const d = new Date(deadline);
+                              d.setHours(h);
+                              setDeadline(d);
+                            }
+                          }}
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          max={59}
+                          placeholder="MM"
+                          value={format(deadline, "mm")}
+                          onChange={(e) => {
+                            const m = parseInt(e.target.value);
+                            if (!isNaN(m) && m >= 0 && m <= 59) {
+                              const d = new Date(deadline);
+                              d.setMinutes(m);
+                              setDeadline(d);
+                            }
+                          }}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" className="bg-taskmaster-primary hover:bg-purple-600">
-              {editingTask ? 'Update' : 'Create'} Task
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              {editingTask ? 'Update Task' : 'Create Task'}
             </Button>
           </div>
         </form>

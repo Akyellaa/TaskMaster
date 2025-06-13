@@ -4,8 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, Filter, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCategories } from '@/context/CategoryContext';
 
-const TaskList = ({ tasks, onCompleteTask, onEditTask, onDeleteTask }) => {
+const TaskList = ({ tasks, onEditTask, onDeleteTask }) => {
+  const { categories } = useCategories();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -17,34 +19,43 @@ const TaskList = ({ tasks, onCompleteTask, onEditTask, onDeleteTask }) => {
       task.description.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesPriority =
-      filterPriority === 'all' || task.priority === filterPriority;
+      filterPriority === 'all' || task.priority === Number(filterPriority);
 
     const matchesCategory =
-      filterCategory === 'all' || task.category === filterCategory;
+      filterCategory === 'all' ||
+      (filterCategory === 'none' && !task.category) ||
+      (task.category && task.category.id.toString() === filterCategory);
 
     const matchesTab =
-      (activeTab === 'pending' && !task.isCompleted) ||
-      (activeTab === 'completed' && task.isCompleted) ||
+      (activeTab === 'pending' && !task.completed && !task.archived) ||
+      (activeTab === 'completed' && task.completed) ||
+      (activeTab === 'archived' && task.archived) ||
       activeTab === 'all';
 
     return matchesSearch && matchesPriority && matchesCategory && matchesTab;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    // Sort by sequence number first
+    if (a.sequenceNumber !== b.sequenceNumber) {
+      return a.sequenceNumber - b.sequenceNumber;
+    }
+    // Then by deadline/creation date
+    const dateA = a.deadline || a.createdAt;
+    const dateB = b.deadline || b.createdAt;
+    return new Date(dateA).getTime() - new Date(dateB).getTime();
   });
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+    <div>
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
-            type="text"
             placeholder="Search tasks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-10"
           />
         </div>
 
@@ -57,10 +68,9 @@ const TaskList = ({ tasks, onCompleteTask, onEditTask, onDeleteTask }) => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="none">None</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="3">High</SelectItem>
+            <SelectItem value="2">Medium</SelectItem>
+            <SelectItem value="1">Low</SelectItem>
           </SelectContent>
         </Select>
 
@@ -68,78 +78,55 @@ const TaskList = ({ tasks, onCompleteTask, onEditTask, onDeleteTask }) => {
           <SelectTrigger>
             <div className="flex items-center">
               <Calendar className="h-4 w-4 mr-2" />
-              <span>{filterCategory === 'all' ? 'All Categories' : `Category: ${filterCategory}`}</span>
+              <span>{
+                filterCategory === 'all'
+                  ? 'All Categories'
+                  : filterCategory === 'none'
+                  ? 'No Category'
+                  : `Category: ${categories.find(c => c.id.toString() === filterCategory)?.name}`
+              }</span>
             </div>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="campus">Campus</SelectItem>
-            <SelectItem value="work">Work</SelectItem>
-            <SelectItem value="competition">Competition</SelectItem>
-            <SelectItem value="personal">Personal</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
+            <SelectItem value="none">No Category</SelectItem>
+            {categories.map((category) => (
+              <SelectItem key={category.id} value={category.id.toString()}>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: category.color }}
+                  />
+                  {category.name}
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
-      <Tabs defaultValue="pending" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 mb-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
           <TabsTrigger value="pending">Pending</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="all">All Tasks</TabsTrigger>
+          <TabsTrigger value="archived">Archived</TabsTrigger>
+          <TabsTrigger value="all">All</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending" className="mt-0">
-          {sortedTasks.length > 0 ? (
+        <TabsContent value={activeTab} className="space-y-4">
+          {sortedTasks.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No tasks found
+            </div>
+          ) : (
             sortedTasks.map((task) => (
               <TaskCard
-                key={task.id}
+                key={task.uuid}
                 task={task}
-                onComplete={onCompleteTask}
                 onEdit={onEditTask}
                 onDelete={onDeleteTask}
               />
             ))
-          ) : (
-            <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-              <p className="text-gray-500">No pending tasks found</p>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="completed" className="mt-0">
-          {sortedTasks.length > 0 ? (
-            sortedTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={onCompleteTask}
-                onEdit={onEditTask}
-                onDelete={onDeleteTask}
-              />
-            ))
-          ) : (
-            <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-              <p className="text-gray-500">No completed tasks found</p>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="all" className="mt-0">
-          {sortedTasks.length > 0 ? (
-            sortedTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={onCompleteTask}
-                onEdit={onEditTask}
-                onDelete={onDeleteTask}
-              />
-            ))
-          ) : (
-            <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-              <p className="text-gray-500">No tasks found</p>
-            </div>
           )}
         </TabsContent>
       </Tabs>

@@ -1,13 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { CheckSquare, Plus, Calendar, List } from 'lucide-react';
+import { CheckSquare, Plus, Calendar, List, LogOut, Tag } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Link } from 'react-router-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import CategoryModal from '../Categories/CategoryModal';
 
 const Header = ({ activeView, setActiveView, onAddTask }) => {
+  const { user, logout } = useAuth();
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-10 bg-white border-b border-gray-200 py-4 px-6 flex justify-between items-center">
       <div className="flex items-center space-x-2">
-        <CheckSquare className="h-6 w-6 text-taskmaster-primary" />
-        <h1 className="text-xl font-bold text-gray-900">TaskMaster</h1>
+        <Link to="/" className="flex items-center space-x-2">
+          <CheckSquare className="h-6 w-6 text-taskmaster-primary" />
+          <h1 className="text-xl font-bold text-gray-900">TaskMaster</h1>
+        </Link>
       </div>
       
       <div className="flex items-center space-x-4">
@@ -32,11 +47,49 @@ const Header = ({ activeView, setActiveView, onAddTask }) => {
           </Button>
         </div>
         
+        <Button asChild variant="outline" className="text-gray-500">
+          <Link to="/categories">
+            <Tag className="h-4 w-4 mr-2" />
+            Categories
+          </Link>
+        </Button>
+
         <Button onClick={onAddTask} className="bg-taskmaster-primary hover:bg-purple-600">
           <Plus className="h-4 w-4 mr-2" />
           New Task
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback>
+                  {user?.name?.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{user?.name}</p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  {user?.email}
+                </p>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={logout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+      />
     </header>
   );
 };

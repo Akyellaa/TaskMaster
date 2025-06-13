@@ -1,175 +1,542 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { BACKEND_URL } from "@/config";
+import { useAuth } from "./AuthContext";
 
-// Create context
 const TaskContext = createContext(undefined);
 
-// Generate sample tasks
-const generateSampleTasks = () => {
-  return [
-    {
-      id: "1",
-      title: "Submission Tugas Algoritma",
-      description: "Kumpulkan tugas algoritma pemrograman",
-      priority: "high",
-      category: "campus",
-      dueDate: new Date(2025, 3, 20),
-      reminderTime: "1day",
-      isRecurring: false,
-      recurringFrequency: "none",
-      recurringEndDate: null,
-      isCompleted: false,
-      createdAt: new Date(),
-    },
-    {
-      id: "2",
-      title: "Persiapan Presentasi",
-      description: "Siapkan slide dan materi presentasi proyek",
-      priority: "medium",
-      category: "work",
-      dueDate: new Date(2025, 3, 18),
-      reminderTime: "3hours",
-      isRecurring: false,
-      recurringFrequency: "none",
-      recurringEndDate: null,
-      isCompleted: false,
-      createdAt: new Date(),
-    },
-    {
-      id: "3",
-      title: "Latihan Lomba Coding",
-      description: "Latihan soal-soal untuk persiapan lomba",
-      priority: "high",
-      category: "competition",
-      dueDate: new Date(2025, 3, 25),
-      reminderTime: "1hour",
-      isRecurring: true,
-      recurringFrequency: "weekly",
-      recurringEndDate: new Date(2025, 5, 25),
-      isCompleted: false,
-      createdAt: new Date(),
-    },
-    {
-      id: "4",
-      title: "Olahraga Sore",
-      description: "Jogging di taman kota",
-      priority: "low",
-      category: "personal",
-      dueDate: new Date(2025, 3, 16),
-      reminderTime: "30min",
-      isRecurring: true,
-      recurringFrequency: "daily",
-      recurringEndDate: null,
-      isCompleted: true,
-      createdAt: new Date(),
-    },
-    {
-      id: "5",
-      title: "Belajar React Hooks",
-      description: "Pelajari penggunaan useContext dan useReducer",
-      priority: "medium",
-      category: "campus",
-      dueDate: new Date(2025, 3, 22),
-      reminderTime: "none",
-      isRecurring: false,
-      recurringFrequency: "none",
-      recurringEndDate: null,
-      isCompleted: false,
-      createdAt: new Date(),
-    },
-  ];
-};
-
-// Provider component
 export const TaskProvider = ({ children }) => {
-  const [tasks, setTasks] = useState(generateSampleTasks());
+  const [regularTasks, setRegularTasks] = useState([]);
+  const [recurringTasks, setRecurringTasks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { handleTokenInvalidation } = useAuth();
 
-  const addTask = (task) => {
-    const newTask = {
-      ...task,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-    };
-    setTasks((prevTasks) => [...prevTasks, newTask]);
+  const fetchTasks = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setRegularTasks([]);
+        setRecurringTasks([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/tasks`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleTokenInvalidation();
+        }
+        setError('Failed to fetch tasks');
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.status) {
+        setRegularTasks(data.data.regularTasks);
+        setRecurringTasks(data.data.recurringTasks);
+        setError(null);
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        setError(data.message || 'Failed to fetch tasks');
+      }
+    } catch (err) {
+      setError('Failed to fetch tasks');
+      console.error('Error fetching tasks:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const updateTask = (id, updatedTask) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === id ? { ...task, ...updatedTask } : task
-      )
-    );
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const addTask = async (task) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks`;
+
+      // Clean up the task data before sending
+      const taskData = {
+        ...task,
+        recurrenceDays: task.recurrenceDays || undefined,
+        deadline: task.deadline || undefined
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(taskData),
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      
+      if (data.status) {
+        // Update the appropriate task list based on the type
+        if (task.taskType === 'RECURRING') {
+          setRecurringTasks(prev => [...prev, data.data].sort((a, b) => a.sequenceNumber - b.sequenceNumber));
+        } else {
+          setRegularTasks(prev => [...prev, data.data].sort((a, b) => a.sequenceNumber - b.sequenceNumber));
+        }
+        return { 
+          success: true, 
+          message: data.message,
+          task: data.data
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { 
+          success: false, 
+          error: data.errors?.[0] || data.message || 'Failed to create task'
+        };
+      }
+    } catch (err) {
+      console.error('Error adding task:', err);
+      return { 
+        success: false, 
+        error: 'Failed to create task'
+      };
+    }
   };
 
-  const deleteTask = (id) => {
-    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
+  const updateTask = async (uuid, updatedTask) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks/${uuid}`;
+
+      // Prepare the update payload based on task type
+      const payload = {
+        title: updatedTask.title,
+        description: updatedTask.description,
+        priority: updatedTask.priority,
+        isCompleted: updatedTask.completed || false,
+        isArchived: updatedTask.archived || false,
+        taskType: updatedTask.taskType,
+        categoryId: typeof updatedTask.categoryId !== 'undefined' ? updatedTask.categoryId : null,
+      };
+
+      // Add type-specific fields
+      if (updatedTask.taskType === 'REGULAR' && updatedTask.deadline) {
+        payload.deadline = updatedTask.deadline;
+      } else if (updatedTask.taskType === 'RECURRING') {
+        payload.recurrenceDays = updatedTask.recurrenceDays || [];
+        payload.doneDates = updatedTask.doneDates || [];
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      
+      if (data.status) {
+        // Update the local state based on the response
+        const updatedTaskData = data.data;
+        const isRecurring = updatedTaskData.recurrenceDays !== undefined;
+        
+        if (isRecurring) {
+          setRecurringTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        } else {
+          setRegularTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        }
+        
+        return { 
+          success: true,
+          message: data.message,
+          task: updatedTaskData
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { 
+          success: false, 
+          error: data.errors?.[0] || data.message || 'Failed to update task'
+        };
+      }
+    } catch (err) {
+      console.error('Error updating task:', err);
+      return { success: false, error: 'Failed to update task' };
+    }
   };
 
-  const completeTask = (id) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === id ? { ...task, isCompleted: !task.isCompleted } : task
-      )
-    );
+  const deleteTask = async (uuid) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks/${uuid}`;
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      if (data.status) {
+        // Update the local state by removing the task
+        const isRecurring = [...recurringTasks, ...regularTasks]
+          .find(task => task.uuid === uuid)?.recurrenceDays !== undefined;
+        
+        if (isRecurring) {
+          setRecurringTasks(prev => 
+            prev.filter(task => task.uuid !== uuid)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        } else {
+          setRegularTasks(prev => 
+            prev.filter(task => task.uuid !== uuid)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        }
+        
+        return { 
+          success: true,
+          message: data.message
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { success: false, error: data.errors?.[0] || data.message };
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      return { success: false, error: 'Failed to delete task' };
+    }
   };
 
+  const completeTask = async (uuid, isRecurring = false, date = null) => {
+    console.log('Completing task:', uuid, 'isRecurring:', isRecurring);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks/${uuid}/complete`;
+      console.log('Complete endpoint:', endpoint);
+      const body = isRecurring && date ? { date } : {};
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      if (data.status) {
+        // Update the local state based on the response
+        const updatedTaskData = data.data;
+        const isRecurringTask = updatedTaskData.recurrenceDays !== undefined;
+        
+        if (isRecurringTask) {
+          setRecurringTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        } else {
+          setRegularTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        }
+        
+        return { 
+          success: true,
+          message: data.message,
+          task: updatedTaskData
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { success: false, error: data.errors?.[0] || data.message };
+      }
+    } catch (err) {
+      console.error('Error completing task:', err);
+      return { success: false, error: 'Failed to complete task' };
+    }
+  };
+
+  const undoCompleteTask = async (uuid) => {
+    console.log('Undoing task completion:', uuid);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks/${uuid}/undo-complete`;
+      console.log('Undo complete endpoint:', endpoint);
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      if (data.status) {
+        // Update the local state based on the response
+        const updatedTaskData = data.data;
+        const isRecurring = updatedTaskData.recurrenceDays !== undefined;
+        
+        if (isRecurring) {
+          setRecurringTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        } else {
+          setRegularTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        }
+        
+        return { 
+          success: true,
+          message: data.message,
+          task: updatedTaskData
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { success: false, error: data.errors?.[0] || data.message };
+      }
+    } catch (err) {
+      console.error('Error undoing task completion:', err);
+      return { success: false, error: 'Failed to undo task completion' };
+    }
+  };
+
+  const archiveTask = async (uuid) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks/${uuid}/archive`;
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      if (data.status) {
+        // Update the local state based on the response
+        const updatedTaskData = data.data;
+        const isRecurring = updatedTaskData.recurrenceDays !== undefined;
+        
+        if (isRecurring) {
+          setRecurringTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        } else {
+          setRegularTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        }
+        
+        return { 
+          success: true,
+          message: data.message,
+          task: updatedTaskData
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { success: false, error: data.errors?.[0] || data.message };
+      }
+    } catch (err) {
+      console.error('Error archiving task:', err);
+      return { success: false, error: 'Failed to archive task' };
+    }
+  };
+
+  const unarchiveTask = async (uuid) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, error: 'No authentication token found' };
+
+      const endpoint = `${BACKEND_URL}/api/tasks/${uuid}/unarchive`;
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok && response.status === 401) {
+        handleTokenInvalidation();
+        return { success: false, error: 'Authentication failed' };
+      }
+
+      const data = await response.json();
+      if (data.status) {
+        // Update the local state based on the response
+        const updatedTaskData = data.data;
+        const isRecurring = updatedTaskData.recurrenceDays !== undefined;
+        
+        if (isRecurring) {
+          setRecurringTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        } else {
+          setRegularTasks(prev => 
+            prev.map(task => task.uuid === uuid ? updatedTaskData : task)
+              .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+          );
+        }
+        
+        return { 
+          success: true,
+          message: data.message,
+          task: updatedTaskData
+        };
+      } else {
+        if (data.message?.toLowerCase().includes('token')) {
+          handleTokenInvalidation();
+        }
+        return { success: false, error: data.errors?.[0] || data.message };
+      }
+    } catch (err) {
+      console.error('Error unarchiving task:', err);
+      return { success: false, error: 'Failed to unarchive task' };
+    }
+  };
+
+  // Helper functions to filter tasks
   const getTasksByCategory = (category) => {
-    return tasks.filter((task) => task.category === category);
+    return [
+      ...regularTasks.filter(task => task.category === category),
+      ...recurringTasks.filter(task => task.category === category)
+    ];
   };
 
   const getTasksByPriority = (priority) => {
-    return tasks.filter((task) => task.priority === priority);
+    return [
+      ...regularTasks.filter(task => task.priority === priority),
+      ...recurringTasks.filter(task => task.priority === priority)
+    ];
   };
 
   const getCompletedTasks = () => {
-    return tasks.filter((task) => task.isCompleted);
+    return [
+      ...regularTasks.filter(task => task.completed),
+      ...recurringTasks.filter(task => task.completed)
+    ];
   };
 
   const getPendingTasks = () => {
-    return tasks.filter((task) => !task.isCompleted);
+    return [
+      ...regularTasks.filter(task => !task.completed && !task.archived),
+      ...recurringTasks.filter(task => !task.completed && !task.archived)
+    ];
   };
 
-  const getDueReminders = () => {
-    const now = new Date();
-    return tasks.filter((task) => {
-      if (task.isCompleted || task.reminderTime === "none") return false;
-
-      const dueDate = new Date(task.dueDate);
-      let reminderDate = new Date(dueDate);
-
-      switch (task.reminderTime) {
-        case "30min":
-          reminderDate.setMinutes(reminderDate.getMinutes() - 30);
-          break;
-        case "1hour":
-          reminderDate.setHours(reminderDate.getHours() - 1);
-          break;
-        case "3hours":
-          reminderDate.setHours(reminderDate.getHours() - 3);
-          break;
-        case "1day":
-          reminderDate.setDate(reminderDate.getDate() - 1);
-          break;
-        default:
-          return false;
-      }
-
-      return now >= reminderDate && now <= dueDate;
-    });
+  const getArchivedTasks = () => {
+    return [
+      ...regularTasks.filter(task => task.archived),
+      ...recurringTasks.filter(task => task.archived)
+    ];
   };
+
+  if (isLoading) {
+    return <div>Loading tasks...</div>; // Or your loading component
+  }
 
   return (
     <TaskContext.Provider
       value={{
-        tasks,
+        regularTasks,
+        recurringTasks,
+        isLoading,
+        error,
         addTask,
         updateTask,
         deleteTask,
         completeTask,
+        undoCompleteTask,
+        archiveTask,
+        unarchiveTask,
         getTasksByCategory,
         getTasksByPriority,
         getCompletedTasks,
         getPendingTasks,
-        getDueReminders,
+        getArchivedTasks,
+        refreshTasks: fetchTasks,
       }}
     >
       {children}
@@ -177,7 +544,6 @@ export const TaskProvider = ({ children }) => {
   );
 };
 
-// Custom hook
 export const useTaskContext = () => {
   const context = useContext(TaskContext);
   if (context === undefined) {
