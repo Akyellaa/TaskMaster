@@ -8,12 +8,17 @@ import {
   isToday,
   addMonths,
   subMonths,
-  addDays,
+  startOfWeek,
+  endOfWeek,
+  isSameMonth,
+  parseISO,
 } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const CalendarView = ({ tasks, onSelectDate }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -21,71 +26,37 @@ const CalendarView = ({ tasks, onSelectDate }) => {
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-  const getExpandedTasks = () => {
-    let expandedTasks = [];
-
-    tasks.forEach(task => {
-      expandedTasks.push(task);
-
-      if (task.isRecurring && task.recurringFrequency !== 'none') {
-        let currentDate = new Date(task.dueDate);
-        const endDate = task.recurringEndDate || addMonths(monthEnd, 3);
-
-        while (currentDate <= endDate) {
-          let nextDate;
-
-          switch (task.recurringFrequency) {
-            case 'daily':
-              nextDate = addDays(currentDate, 1);
-              break;
-            case 'weekly':
-              nextDate = addDays(currentDate, 7);
-              break;
-            case 'monthly':
-              nextDate = addMonths(currentDate, 1);
-              break;
-            default:
-              nextDate = currentDate;
-              break;
-          }
-
-          currentDate = nextDate;
-
-          if (currentDate <= endDate) {
-            expandedTasks.push({
-              ...task,
-              dueDate: currentDate,
-              id: `${task.id}-${format(currentDate, 'yyyy-MM-dd')}`,
-            });
-          }
-        }
-      }
-    });
-
-    return expandedTasks;
-  };
+  const calendarStart = startOfWeek(monthStart);
+  const calendarEnd = endOfWeek(monthEnd);
+  const daysInCalendar = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   const getTasksForDate = (date) => {
-    const expandedTasks = getExpandedTasks();
-    return expandedTasks.filter(task => isSameDay(new Date(task.dueDate), date));
+    return tasks.filter(task => {
+      if (task.deadline) {
+        return isSameDay(parseISO(task.deadline), date);
+      }
+      if (task.recurrenceDays) {
+        const dayName = format(date, 'EEEE').toUpperCase();
+        return task.recurrenceDays.includes(dayName);
+      }
+      return false;
+    });
   };
 
   const getPrioritizedTasksForDate = (date) => {
     const tasksForDate = getTasksForDate(date);
     return tasksForDate
-      .sort((a, b) => {
-        const priorityOrder = { high: 3, medium: 2, low: 1, none: 0 };
-        return priorityOrder[b.priority] - priorityOrder[a.priority];
-      })
+      .sort((a, b) => b.priority - a.priority)
       .slice(0, 3);
   };
 
-  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
   const previousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const today = () => {
+    setCurrentMonth(new Date());
+    setSelectedDate(new Date());
+    onSelectDate(new Date());
+  };
 
   const handleDateClick = (date) => {
     setSelectedDate(date);
@@ -93,45 +64,61 @@ const CalendarView = ({ tasks, onSelectDate }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">{format(currentMonth, 'MMMM yyyy')}</h2>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <h2 className="text-2xl font-semibold">{format(currentMonth, 'MMMM yyyy')}</h2>
+          <Button variant="outline" size="sm" onClick={today}>
+            Today
+          </Button>
+        </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={previousMonth}>
+          <Button variant="outline" size="icon" onClick={previousMonth}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={nextMonth}>
+          <Button variant="outline" size="icon" onClick={nextMonth}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
-        {weekdays.map((weekday) => (
-          <div key={weekday} className="text-center text-sm font-medium text-gray-500 py-2">
-            {weekday}
+      <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          <div
+            key={day}
+            className="bg-gray-100 px-2 py-3 text-sm font-medium text-center"
+          >
+            {day}
           </div>
         ))}
 
-        {daysInMonth.map((date, i) => {
+        {daysInCalendar.map((date, i) => {
           const tasksForDate = getTasksForDate(date);
           const prioritizedTasks = getPrioritizedTasksForDate(date);
           const isSelected = selectedDate && isSameDay(date, selectedDate);
+          const isCurrentMonth = isSameMonth(date, currentMonth);
           const hasTasks = tasksForDate.length > 0;
 
           return (
             <div
               key={i}
               className={cn(
-                "min-h-[100px] p-2 border rounded-md",
-                isToday(date) && "bg-blue-50 border-blue-200",
+                "min-h-[120px] bg-white p-2 relative",
+                !isCurrentMonth && "bg-gray-50",
                 isSelected && "ring-2 ring-taskmaster-primary",
                 "hover:bg-gray-50 cursor-pointer transition-colors"
               )}
               onClick={() => handleDateClick(date)}
             >
               <div className="flex justify-between items-start">
-                <span className={cn("text-sm font-medium", isToday(date) && "text-blue-600 font-bold")}>
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    !isCurrentMonth && "text-gray-400",
+                    isToday(date) && "text-taskmaster-primary font-bold",
+                    isSelected && "text-taskmaster-primary"
+                  )}
+                >
                   {format(date, 'd')}
                 </span>
                 {hasTasks && (
@@ -141,29 +128,48 @@ const CalendarView = ({ tasks, onSelectDate }) => {
                 )}
               </div>
 
-              <div className="mt-2 space-y-1">
-                {prioritizedTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={`text-xs truncate p-1 rounded ${
-                      task.priority === 'high'
-                        ? 'bg-purple-100 text-purple-800'
-                        : task.priority === 'medium'
-                        ? 'bg-orange-100 text-orange-800'
-                        : task.priority === 'low'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {task.title}
-                  </div>
-                ))}
-                {tasksForDate.length > 3 && (
-                  <div className="text-xs text-gray-500">
-                    +{tasksForDate.length - 3} more
-                  </div>
-                )}
-              </div>
+              <ScrollArea className="h-[80px] mt-1">
+                <div className="space-y-1">
+                  {prioritizedTasks.map((task) => (
+                    <TooltipProvider key={task.uuid}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={cn(
+                              "text-xs p-1 rounded truncate",
+                              task.completed && "line-through opacity-50",
+                              task.priority === 3 && "bg-red-100 text-red-800",
+                              task.priority === 2 && "bg-orange-100 text-orange-800",
+                              task.priority === 1 && "bg-green-100 text-green-800",
+                            )}
+                          >
+                            {task.title}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div className="space-y-1">
+                            <p className="font-medium">{task.title}</p>
+                            {task.description && (
+                              <p className="text-xs text-gray-500">{task.description}</p>
+                            )}
+                            {task.deadline && (
+                              <p className="text-xs flex items-center">
+                                <CalendarIcon className="h-3 w-3 mr-1" />
+                                {format(parseISO(task.deadline), "HH:mm")}
+                              </p>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                  {tasksForDate.length > 3 && (
+                    <div className="text-xs text-gray-500 pl-1">
+                      +{tasksForDate.length - 3} more
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
           );
         })}
