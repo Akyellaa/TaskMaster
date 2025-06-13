@@ -2,6 +2,14 @@
 
 A modern, full-featured task management application built with React, featuring both regular and recurring tasks, category management, and a beautiful user interface.
 
+## Preview
+
+![image](https://github.com/user-attachments/assets/08da274f-d88a-43f3-bbca-b83340cab1a6)
+![image](https://github.com/user-attachments/assets/999b0ad1-80b1-4b6d-adea-4f6ae4de2784)
+![image](https://github.com/user-attachments/assets/6d68f305-8045-4904-b853-d289386782a1)
+![image](https://github.com/user-attachments/assets/4a474f2f-b516-4481-bd1c-f967b30ea8c8)
+
+
 ## Features
 
 ### 🎯 Task Management
