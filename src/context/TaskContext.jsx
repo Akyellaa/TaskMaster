@@ -9,7 +9,7 @@ export const TaskProvider = ({ children }) => {
   const [recurringTasks, setRecurringTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { handleTokenInvalidation } = useAuth();
+  const { handleTokenInvalidation, isAuthenticated } = useAuth();
 
   const fetchTasks = async () => {
     try {
@@ -56,8 +56,16 @@ export const TaskProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (isAuthenticated) {
+      fetchTasks();
+    } else {
+      // Clear data when not authenticated
+      setRegularTasks([]);
+      setRecurringTasks([]);
+      setIsLoading(false);
+      setError(null);
+    }
+  }, [isAuthenticated]);
 
   const addTask = async (task) => {
     try {
@@ -512,10 +520,6 @@ export const TaskProvider = ({ children }) => {
       ...recurringTasks.filter(task => task.archived)
     ];
   };
-
-  if (isLoading) {
-    return <div>Loading tasks...</div>; // Or your loading component
-  }
 
   return (
     <TaskContext.Provider

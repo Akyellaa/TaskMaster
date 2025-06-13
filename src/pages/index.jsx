@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTaskContext } from '@/context/TaskContext';
 import Header from '@/components/Layout/Header';
 import TaskList from '@/components/Tasks/TaskList';
@@ -7,7 +7,19 @@ import CalendarView from '@/components/Calendar/CalendarView';
 import StatisticCard from '@/components/Dashboard/StatisticCard';
 import { CheckCircle, Clock, ListChecks, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday, isThisWeek, isThisMonth } from 'date-fns';
+import { format, isToday, isThisWeek, isThisMonth, isSameDay, parseISO, startOfDay } from 'date-fns';
+import { useLocation } from 'react-router-dom';
+
+// Map day names to numbers
+const DAY_MAP = {
+  'SUNDAY': 0,
+  'MONDAY': 1,
+  'TUESDAY': 2,
+  'WEDNESDAY': 3,
+  'THURSDAY': 4,
+  'FRIDAY': 5,
+  'SATURDAY': 6
+};
 
 const Index = () => {
   const { 
@@ -21,191 +33,189 @@ const Index = () => {
     error
   } = useTaskContext();
   
-  const [activeView, setActiveView] = useState('list');
+  const location = useLocation();
+  const [activeView, setActiveView] = useState(location.state?.activeView || 'list');
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [editingTask, setEditingTask] = useState(undefined);
   const { toast } = useToast();
 
-  // Combine regular and recurring tasks
-  const allTasks = [...regularTasks, ...recurringTasks];
+  // Update activeView when navigating back from categories
+  useEffect(() => {
+    if (location.state?.activeView) {
+      setActiveView(location.state.activeView);
+    }
+  }, [location.state]);
 
-  const filteredTasks = activeView === 'calendar' 
-    ? allTasks.filter(task => {
-        const taskDate = task.deadline || task.recurrenceDays;
-        if (!taskDate) return false;
-        return isToday(new Date(taskDate));
-      })
-    : allTasks;
+  // Filter tasks for today
+  const getTodaysTasks = () => {
+    const today = startOfDay(new Date());
+    const todayDayName = Object.keys(DAY_MAP).find(
+      key => DAY_MAP[key] === today.getDay()
+    );
+    
+    // Filter regular tasks
+    const todaysRegularTasks = regularTasks.filter(task => {
+      if (!task?.deadline) return false;
+      // Don't show archived tasks
+      if (task?.archived) return false;
+      // Compare dates using startOfDay to ignore time
+      // return isSameDay(parseISO(task.deadline), today);
+      return true
+    });
 
-  const completedToday = allTasks.filter(task => {
-    const isCompleted = task.completed;
-    const taskDate = task.deadline || task.recurrenceDays;
-    return isCompleted && taskDate && isToday(new Date(taskDate));
+    // Filter recurring tasks
+    const todaysRecurringTasks = recurringTasks.filter(task => {
+      if (!task?.recurrenceDays || task?.archived) return false;
+      // Check if today's day name is in the recurrence days
+      return task.recurrenceDays.includes(todayDayName);
+    }).map(task => {
+      // Check if task is done today using doneDates
+      const isDoneToday = task?.doneDates?.some(date => 
+        isSameDay(parseISO(date), today)
+      ) || false;
+      
+      return {
+        ...task,
+        completed: isDoneToday // Override completed status based on today's completion
+      };
+    });
+
+    return [...todaysRegularTasks, ...todaysRecurringTasks];
+  };
+
+  const todaysTasks = getTodaysTasks();
+
+  // Statistics calculations
+  const completedToday = todaysTasks.filter(task => task.completed).length;
+
+  const completedThisWeek = [...regularTasks, ...recurringTasks].filter(task => {
+    if (!task || task?.archived) return false;
+    
+    if (task?.taskType === 'REGULAR') {
+      return task.completed && task.deadline && isThisWeek(parseISO(task.deadline));
+    } else {
+      // For recurring tasks, check doneDates within this week
+      return Array.isArray(task?.doneDates) && task.doneDates.some(date => isThisWeek(parseISO(date))) || false;
+    }
   }).length;
 
-  const completedThisWeek = allTasks.filter(task => {
-    const isCompleted = task.completed;
-    const taskDate = task.deadline || task.recurrenceDays;
-    return isCompleted && taskDate && isThisWeek(new Date(taskDate));
-  }).length;
-
-  const completedThisMonth = allTasks.filter(task => {
-    const isCompleted = task.completed;
-    const taskDate = task.deadline || task.recurrenceDays;
-    return isCompleted && taskDate && isThisMonth(new Date(taskDate));
-  }).length;
-
-  const highPriorityTasks = allTasks.filter(task => task.priority === 3).length;
+  const handleAddTask = () => {
+    setEditingTask(undefined);
+    setIsTaskFormOpen(true);
+  };
 
   const handleTaskSubmit = async (taskData) => {
-    const response = await addTask(taskData);
-    
-    if (response.success) {
-      toast({
-        title: 'Task created',
-        description: response.message || `"${taskData.title}" has been added to your tasks.`,
-      });
+    try {
+      if (editingTask) {
+        await updateTask(editingTask.uuid, taskData);
+        toast({
+          title: "Success",
+          description: "Task updated successfully",
+        });
+      } else {
+        await addTask(taskData);
+        toast({
+          title: "Success",
+          description: "Task created successfully",
+        });
+      }
       setIsTaskFormOpen(false);
-    } else {
+    } catch (err) {
       toast({
-        title: 'Error',
-        description: response.error || 'Failed to create task',
-        variant: 'destructive',
+        title: "Error",
+        description: err.error || "Failed to save task",
+        variant: "destructive",
       });
     }
   };
 
-  const handleTaskDelete = async (uuid) => {
-    const taskToDelete = allTasks.find(task => task.uuid === uuid);
-    const response = await deleteTask(uuid);
-
-    if (response.success) {
-      toast({
-        title: 'Task deleted',
-        description: `"${taskToDelete?.title}" has been deleted.`,
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: 'Error',
-        description: response.error || 'Failed to delete task',
-        variant: 'destructive',
-      });
-    }
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setIsTaskFormOpen(true);
   };
 
-  const handleTaskEdit = async (task) => {
-    if (task) {
-      setEditingTask(task);
-      setIsTaskFormOpen(true);
-      return;
-    }
-  };
-
-  const handleTaskUpdate = async (taskData) => {
-    if (!editingTask) return;
-
-    const response = await updateTask(editingTask.uuid, taskData);
-
-    if (response.success) {
+  const handleDeleteTask = async (uuid) => {
+    try {
+      await deleteTask(uuid);
       toast({
-        title: 'Task updated',
-        description: `"${editingTask.title}" has been updated successfully.`,
+        title: "Success",
+        description: "Task deleted successfully",
       });
-      setIsTaskFormOpen(false);
-      setEditingTask(undefined);
-    } else {
+    } catch (err) {
       toast({
-        title: 'Error',
-        description: response.error || 'Failed to update task',
-        variant: 'destructive',
+        title: "Error",
+        description: err.error || "Failed to delete task",
+        variant: "destructive",
       });
     }
   };
-
-  const handleDateSelect = (date) => {
-    setSelectedDate(date);
-    const tasksForDate = allTasks.filter(task => {
-      const taskDate = task.deadline || task.recurrenceDays;
-      if (!taskDate) return false;
-      return format(new Date(taskDate), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
-    });
-    
-    toast({
-      title: `Tasks for ${format(date, 'MMMM d, yyyy')}`,
-      description: `${tasksForDate.length} tasks scheduled for this day.`,
-    });
-  };
-
-  if (isLoading) {
-    return <div>Loading tasks...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-background">
       <Header 
-        activeView={activeView} 
-        setActiveView={setActiveView} 
-        onAddTask={() => {
-          setEditingTask(undefined);
-          setIsTaskFormOpen(true);
-        }} 
+        activeView={activeView}
+        setActiveView={setActiveView}
+        onAddTask={handleAddTask}
       />
-
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-7xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      
+      <main className="container mx-auto py-6 space-y-6">
+        {/* Statistics Cards */}
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           <StatisticCard
-            title="Completed Today"
+            title="Tasks Completed Today"
             value={completedToday}
-            icon={<CheckCircle className="h-6 w-6" />}
+            icon={<CheckCircle className="h-4 w-4" />}
+            description="Tasks finished today"
           />
           <StatisticCard
-            title="Completed This Week"
+            title="Tasks Completed This Week"
             value={completedThisWeek}
-            icon={<Clock className="h-6 w-6" />}
+            icon={<Clock className="h-4 w-4" />}
+            description="Tasks finished this week"
           />
           <StatisticCard
-            title="Completed This Month"
-            value={completedThisMonth}
-            icon={<ListChecks className="h-6 w-6" />}
+            title="Total Active Tasks"
+            value={todaysTasks.filter(task => !task.completed && !task?.archived).length}
+            icon={<ListChecks className="h-4 w-4" />}
+            description="Tasks in progress"
           />
           <StatisticCard
             title="High Priority Tasks"
-            value={highPriorityTasks}
-            icon={<AlertTriangle className="h-6 w-6" />}
+            value={todaysTasks.filter(task => task.priority === 3).length}
+            icon={<AlertTriangle className="h-4 w-4" />}
+            description="Tasks needing attention"
           />
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          {activeView === 'list' ? (
-            <TaskList
-              tasks={filteredTasks}
-              onEditTask={handleTaskEdit}
-              onDeleteTask={handleTaskDelete}
-            />
-          ) : (
-            <CalendarView 
-              tasks={allTasks} 
-              onSelectDate={handleDateSelect} 
-            />
-          )}
-        </div>
-      </main>
+        {/* Task List or Calendar View */}
+        {activeView === 'list' ? (
+          <TaskList
+            tasks={todaysTasks}
+            onEditTask={handleEditTask}
+            onDeleteTask={handleDeleteTask}
+          />
+        ) : (
+          <CalendarView
+            tasks={[...regularTasks, ...recurringTasks].filter(task => !task?.archived)}
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            onEditTask={handleEditTask}
+            onDeleteTask={handleDeleteTask}
+          />
+        )}
 
-      <TaskForm
-        open={isTaskFormOpen}
-        onClose={() => {
-          setIsTaskFormOpen(false);
-          setEditingTask(undefined);
-        }}
-        onSubmit={editingTask ? handleTaskUpdate : handleTaskSubmit}
-        editingTask={editingTask}
-      />
+        {/* Task Form Modal */}
+        <TaskForm
+          open={isTaskFormOpen}
+          onClose={() => {
+            setIsTaskFormOpen(false);
+            setEditingTask(undefined);
+          }}
+          onSubmit={handleTaskSubmit}
+          editingTask={editingTask}
+        />
+      </main>
     </div>
   );
 };

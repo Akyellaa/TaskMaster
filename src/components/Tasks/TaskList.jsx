@@ -32,11 +32,18 @@ const TaskList = ({ tasks, onEditTask, onDeleteTask }) => {
       (activeTab === 'archived' && task.archived) ||
       activeTab === 'all';
 
+      console.log("task", task)
+      console.log("matchesCategory", matchesCategory)
+      console.log("matchesPriority", matchesPriority)
+      console.log("matchesSearch", matchesSearch)
+      console.log("matchesTab", matchesTab)
+
     return matchesSearch && matchesPriority && matchesCategory && matchesTab;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     // Sort by sequence number first
+    console.log(filteredTasks)
     if (a.sequenceNumber !== b.sequenceNumber) {
       return a.sequenceNumber - b.sequenceNumber;
     }

@@ -17,7 +17,7 @@ export const CategoryProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { handleTokenInvalidation } = useAuth();
+  const { handleTokenInvalidation, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
   const fetchCategories = async () => {
@@ -131,14 +131,15 @@ export const CategoryProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (isAuthenticated) {
       fetchCategories();
     } else {
+      // Clear data when not authenticated
       setCategories([]);
       setLoading(false);
+      setError(null);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const value = {
     categories,

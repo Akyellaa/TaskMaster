@@ -1,8 +1,8 @@
 import React from 'react';
-import { format } from 'date-fns';
+import { format, isPast, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Calendar, Edit, Trash2, Repeat, Archive, ArchiveRestore } from 'lucide-react';
+import { Calendar, Edit, Trash2, Repeat, Archive, ArchiveRestore, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTaskContext } from '@/context/TaskContext';
@@ -12,6 +12,7 @@ const TaskCard = ({ task, onEdit, onDelete }) => {
   const { completeTask, undoCompleteTask, archiveTask, unarchiveTask } = useTaskContext();
   const { toast } = useToast();
   const isRecurring = 'recurrenceDays' in task;
+  const isOverdue = !isRecurring && task.deadline && !task.completed && isPast(parseISO(task.deadline));
 
   const taskCategory = task.category; // already an object or null
 
@@ -91,9 +92,26 @@ const TaskCard = ({ task, onEdit, onDelete }) => {
         />
         
         <div className="flex-1">
-          <h3 className={`text-lg font-medium ${task.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-            {task.title}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className={`text-lg font-medium ${task.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+              {task.title}
+            </h3>
+            {isOverdue && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Overdue
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Task was due on {format(parseISO(task.deadline), "MMM dd, yyyy HH:mm")}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           
           <p className="text-gray-600 mt-1 text-sm">{task.description}</p>
           
@@ -131,21 +149,15 @@ const TaskCard = ({ task, onEdit, onDelete }) => {
                 </Tooltip>
               </TooltipProvider>
             ) : task.deadline && (
-              <div className="flex items-center text-sm text-gray-500">
+              <div className={`flex items-center text-sm ${isOverdue ? 'text-red-500' : 'text-gray-500'}`}>
                 <Calendar className="h-3.5 w-3.5 mr-1" />
-                {format(new Date(task.deadline), "MMM dd, yyyy HH:mm")}
+                {format(parseISO(task.deadline), "MMM dd, yyyy HH:mm")}
               </div>
             )}
 
             <Badge variant="outline" className={`${getPriorityClass(task.priority)} bg-opacity-10`}>
               {getPriorityLabel(task.priority)}
             </Badge>
-
-            {task.status && task.status !== 'PENDING' && (
-              <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
-                {task.status}
-              </Badge>
-            )}
 
             {task.archived && (
               <Badge variant="outline" className="bg-gray-50 text-gray-800">
