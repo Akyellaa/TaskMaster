@@ -12,7 +12,17 @@ const TaskCard = ({ task, onEdit, onDelete }) => {
   const { completeTask, undoCompleteTask, archiveTask, unarchiveTask } = useTaskContext();
   const { toast } = useToast();
   const isRecurring = 'recurrenceDays' in task;
-  const isOverdue = !isRecurring && task.deadline && !task.completed && isPast(parseISO(task.deadline));
+
+  // Helper function to convert UTC to local timezone
+  const convertToLocalTime = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    // console.log("date", date)
+    // Create a new date object with the local timezone offset
+    return new Date(date.getTime());
+  };
+
+  const isOverdue = !isRecurring && task.deadline && !task.completed && isPast(convertToLocalTime(task.deadline));
 
   const taskCategory = task.category; // already an object or null
 
@@ -106,7 +116,7 @@ const TaskCard = ({ task, onEdit, onDelete }) => {
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Task was due on {format(parseISO(task.deadline), "MMM dd, yyyy HH:mm")}</p>
+                    <p>Task was due on {format(convertToLocalTime(task.deadline), "MMM dd, yyyy HH:mm")}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -151,7 +161,7 @@ const TaskCard = ({ task, onEdit, onDelete }) => {
             ) : task.deadline && (
               <div className={`flex items-center text-sm ${isOverdue ? 'text-red-500' : 'text-gray-500'}`}>
                 <Calendar className="h-3.5 w-3.5 mr-1" />
-                {format(parseISO(task.deadline), "MMM dd, yyyy HH:mm")}
+                {format(convertToLocalTime(task.deadline), "MMM dd, yyyy HH:mm")}
               </div>
             )}
 

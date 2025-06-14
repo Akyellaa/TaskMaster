@@ -56,9 +56,9 @@ const Index = () => {
     
     // Filter regular tasks
     const todaysRegularTasks = regularTasks.filter(task => {
-      if (!task?.deadline) return false;
+      // if (!task?.deadline) return false;
       // Don't show archived tasks
-      if (task?.archived) return false;
+      // if (task?.archived) return false;
       // Compare dates using startOfDay to ignore time
       // return isSameDay(parseISO(task.deadline), today);
       return true

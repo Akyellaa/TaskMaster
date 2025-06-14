@@ -63,34 +63,10 @@ export function AuthProvider({ children }) {
     });
     const data = await response.json();
     if (data.status) {
-      localStorage.setItem('token', data.data);
-      
-      // Fetch user data after successful login
-      try {
-        const userResponse = await fetch(`${BACKEND_URL}/api/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${data.data}`
-          }
-        });
-        
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          if (userData.status) {
-            setUser(userData.data);
-          } else {
-            // Fallback to email if /me endpoint fails
-            setUser({ email: credentials.email });
-          }
-        } else {
-          // Fallback to email if /me endpoint fails
-          setUser({ email: credentials.email });
-        }
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        // Fallback to email if /me endpoint fails
-        setUser({ email: credentials.email });
-      }
-      
+      // Extract token and user from the nested data structure
+      const { token, user } = data.data;
+      localStorage.setItem('token', token);
+      setUser(user);
       setIsAuthenticated(true);
     }
     return data;

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar, Filter, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCategories } from '@/context/CategoryContext';
+import { parseISO } from 'date-fns';
 
 const TaskList = ({ tasks, onEditTask, onDeleteTask }) => {
   const { categories } = useCategories();
@@ -12,6 +13,14 @@ const TaskList = ({ tasks, onEditTask, onDeleteTask }) => {
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('pending');
+
+  // Helper function to convert UTC to local timezone
+  const convertToLocalTime = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    // Create a new date object with the local timezone offset
+    return new Date(date.getTime());
+  };
 
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
@@ -32,31 +41,30 @@ const TaskList = ({ tasks, onEditTask, onDeleteTask }) => {
       (activeTab === 'archived' && task.archived) ||
       activeTab === 'all';
 
-      console.log("task", task)
-      console.log("matchesCategory", matchesCategory)
-      console.log("matchesPriority", matchesPriority)
-      console.log("matchesSearch", matchesSearch)
-      console.log("matchesTab", matchesTab)
+      // console.log("task", task)
+      // console.log("matchesCategory", matchesCategory)
+      // console.log("matchesPriority", matchesPriority)
+      // console.log("matchesSearch", matchesSearch)
+      // console.log("matchesTab", matchesTab)
 
     return matchesSearch && matchesPriority && matchesCategory && matchesTab;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     // Sort by sequence number first
-    console.log(filteredTasks)
     if (a.sequenceNumber !== b.sequenceNumber) {
       return a.sequenceNumber - b.sequenceNumber;
     }
-    // Then by deadline/creation date
-    const dateA = a.deadline || a.createdAt;
-    const dateB = b.deadline || b.createdAt;
-    return new Date(dateA).getTime() - new Date(dateB).getTime();
+    // Then by deadline/creation date with timezone conversion
+    const dateA = convertToLocalTime(a.deadline || a.createdAt);
+    const dateB = convertToLocalTime(b.deadline || b.createdAt);
+    return dateA.getTime() - dateB.getTime();
   });
 
   return (
     <div>
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
+        <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             placeholder="Search tasks..."

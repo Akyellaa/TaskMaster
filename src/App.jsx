@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { TaskProvider } from "./context/TaskContext";
 import { AuthProvider } from "./context/AuthContext";
 import { CategoryProvider } from "./context/CategoryContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import AuthModal from "./components/Auth/AuthModal";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -49,11 +50,13 @@ const App = () => (
     <AuthProvider>
       <CategoryProvider>
         <TaskProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <AuthenticatedApp />
-          </TooltipProvider>
+          <NotificationProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <AuthenticatedApp />
+            </TooltipProvider>
+          </NotificationProvider>
         </TaskProvider>
       </CategoryProvider>
     </AuthProvider>

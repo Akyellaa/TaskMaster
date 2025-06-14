@@ -65,6 +65,9 @@ const TaskForm = ({ open, onClose, onSubmit, editingTask }) => {
       taskType: isRecurring ? 'RECURRING' : 'REGULAR'
     };
 
+    // Convert to UTC by subtracting 7 hours
+    const utcDeadline = isRecurring ? null : new Date(deadline.getTime());
+
     // Add type-specific fields
     const taskData = isRecurring 
       ? {
@@ -73,7 +76,7 @@ const TaskForm = ({ open, onClose, onSubmit, editingTask }) => {
         }
       : {
           ...baseTaskData,
-          deadline: format(deadline, "yyyy-MM-dd'T'HH:mm:ss'Z'")
+          deadline: utcDeadline.toISOString()
         };
 
     onSubmit(taskData);
