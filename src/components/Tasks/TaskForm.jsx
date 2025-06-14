@@ -24,6 +24,9 @@ const TaskForm = ({ open, onClose, onSubmit, editingTask }) => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [selectedDays, setSelectedDays] = useState([]);
 
+  // Filter out archived categories
+  const activeCategories = categories.filter(category => !category.archived);
+
   useEffect(() => {
     if (editingTask) {
       setTitle(editingTask.title);
@@ -147,7 +150,7 @@ const TaskForm = ({ open, onClose, onSubmit, editingTask }) => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No Category</SelectItem>
-                    {categories.map((category) => (
+                    {activeCategories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
                         <div className="flex items-center gap-2">
                           <div
